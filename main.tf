@@ -85,6 +85,18 @@ resource "aws_s3_bucket_cors_configuration" "static" {
   }
 }
 
+resource "aws_s3_object" "health" {
+  bucket       = aws_s3_bucket.static.id
+  key          = "health.txt"
+  content      = "ok"
+  content_type = "text/plain"
+
+  tags = merge(var.tags, {
+    Name    = "health.txt"
+    Purpose = "monitoring"
+  })
+}
+
 resource "aws_cloudfront_origin_access_control" "static" {
   name                              = "${var.bucket_name}-oac"
   origin_access_control_origin_type = "s3"
@@ -150,4 +162,94 @@ resource "cloudflare_record" "cdn" {
   content = aws_cloudfront_distribution.static.domain_name
   proxied = var.cloudflare_proxied
   ttl     = var.cloudflare_proxied ? 1 : 300
+}
+
+resource "aws_sns_topic" "s3_request_alerts" {
+  name = "${var.bucket_name}-s3-request-alerts"
+
+  tags = merge(var.tags, {
+    Name    = "${var.bucket_name}-s3-request-alerts"
+    Purpose = "monitoring"
+  })
+}
+
+resource "aws_sns_topic_subscription" "s3_request_alerts_email" {
+  topic_arn = aws_sns_topic.s3_request_alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+resource "aws_cloudwatch_metric_alarm" "s3_high_requests" {
+  alarm_name          = "${var.bucket_name}-high-requests"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "AllRequests"
+  namespace           = "AWS/S3"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 100
+  alarm_description   = "This metric monitors S3 bucket requests exceeding 100 in 1 minute to detect DDoS attacks"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    BucketName = aws_s3_bucket.static.id
+    FilterId   = "EntireBucket"
+  }
+
+  alarm_actions = [aws_sns_topic.s3_request_alerts.arn]
+
+  tags = merge(var.tags, {
+    Name    = "${var.bucket_name}-high-requests-alarm"
+    Purpose = "monitoring"
+  })
+}
+
+resource "aws_cloudwatch_metric_alarm" "s3_high_4xx_errors" {
+  alarm_name          = "${var.bucket_name}-high-4xx-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "4xxErrors"
+  namespace           = "AWS/S3"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 1000
+  alarm_description   = "This metric monitors S3 bucket 4xx errors exceeding 1000 in 1 minute to detect scanning/brute force attacks"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    BucketName = aws_s3_bucket.static.id
+    FilterId   = "EntireBucket"
+  }
+
+  alarm_actions = [aws_sns_topic.s3_request_alerts.arn]
+
+  tags = merge(var.tags, {
+    Name    = "${var.bucket_name}-high-4xx-errors-alarm"
+    Purpose = "monitoring"
+  })
+}
+
+resource "aws_cloudwatch_metric_alarm" "s3_high_5xx_errors" {
+  alarm_name          = "${var.bucket_name}-high-5xx-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "5xxErrors"
+  namespace           = "AWS/S3"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 100
+  alarm_description   = "This metric monitors S3 bucket 5xx errors exceeding 100 in 1 minute to detect overload conditions"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    BucketName = aws_s3_bucket.static.id
+    FilterId   = "EntireBucket"
+  }
+
+  alarm_actions = [aws_sns_topic.s3_request_alerts.arn]
+
+  tags = merge(var.tags, {
+    Name    = "${var.bucket_name}-high-5xx-errors-alarm"
+    Purpose = "monitoring"
+  })
 }
