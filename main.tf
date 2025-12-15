@@ -111,6 +111,7 @@ resource "aws_cloudfront_distribution" "static" {
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
 
+
     forwarded_values {
       query_string = false
       cookies {
@@ -118,14 +119,15 @@ resource "aws_cloudfront_distribution" "static" {
       }
     }
 
-    min_ttl     = 0
+    min_ttl     = 3600
     default_ttl = var.cache_ttl
     max_ttl     = 31536000
   }
 
   restrictions {
     geo_restriction {
-      restriction_type = "none"
+      restriction_type = "blacklist"
+      locations        = ["RU"]
     }
   }
 
