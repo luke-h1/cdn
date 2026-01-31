@@ -42,3 +42,11 @@ terraform.rc
 
 # Lambda deployment packages
 *.zip
+
+# Next.js / admin
+admin/.next/
+admin/node_modules/
+admin/.env.local
+admin/.env*.local
+
+.env
