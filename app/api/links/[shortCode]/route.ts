@@ -1,11 +1,19 @@
 import { NextRequest } from "next/server";
-import { getLink, deleteLink } from "@/lib/d1";
-import { badRequest, notFound, serverError, jsonResponse } from "@/lib/http";
+import { getLink, deleteLink } from "@/lib/dynamodb";
+import {
+  badRequest,
+  notFound,
+  serverError,
+  jsonResponse,
+  checkBasicAuth,
+  unauthorizedResponse,
+} from "@/lib/http";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> },
 ) {
+  if (!checkBasicAuth(request)) return unauthorizedResponse();
   const p = await params;
   const shortCode =
     typeof p?.shortCode === "string" ? decodeURIComponent(p.shortCode) : null;
@@ -29,9 +37,10 @@ export async function GET(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> },
 ) {
+  if (!checkBasicAuth(request)) return unauthorizedResponse();
   const p = await params;
   const shortCode =
     typeof p?.shortCode === "string" ? decodeURIComponent(p.shortCode) : null;

@@ -19,8 +19,9 @@ export {
   copyObject,
   headObject,
   getObject,
-} from "./r2";
-export type { R2ObjectMeta, R2GetResult } from "./r2";
+  getPublicUrl,
+} from "./s3";
+export type { S3ObjectMeta, S3GetResult } from "./s3";
 
 export {
   putLink,
@@ -28,6 +29,5 @@ export {
   getLink,
   listLinks,
   deleteLink,
-  initializeDatabase,
-} from "./d1";
-export type { LinkRecord } from "./d1";
+} from "./dynamodb";
+export type { LinkRecord } from "./dynamodb";

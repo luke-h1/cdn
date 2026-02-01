@@ -1,153 +1,50 @@
-provider "cloudflare" {
-  api_token = var.cloudflare_api_token
+provider "aws" {
+  region = var.aws_region
 }
 
-
-resource "cloudflare_r2_bucket" "cdn" {
-  account_id = var.cloudflare_account_id
-  name       = var.bucket_name
-  location   = var.r2_location
+# S3 bucket for asset storage
+resource "aws_s3_bucket" "cdn" {
+  bucket = var.bucket_name
 }
 
-resource "cloudflare_d1_database" "links" {
-  account_id = var.cloudflare_account_id
-  name       = var.d1_database_name
+resource "aws_s3_bucket_public_access_block" "cdn" {
+  bucket = aws_s3_bucket.cdn.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
-resource "cloudflare_ruleset" "cache_rules" {
-  zone_id = var.cloudflare_zone_id
-  name    = "${var.bucket_name}-cache-rules"
-  kind    = "zone"
-  phase   = "http_request_cache_settings"
-
-  rules {
-    action = "set_cache_settings"
-    action_parameters {
-      cache = true
-      edge_ttl {
-        mode = "respect_origin"
-      }
-      browser_ttl {
-        mode = "respect_origin"
-      }
-    }
-    expression  = "(http.host eq \"${var.domain}\" and http.request.uri.path.extension in {\"jpg\" \"jpeg\" \"png\" \"webp\" \"gif\" \"svg\" \"ico\" \"avif\"})"
-    description = "Cache images for CDN"
-    enabled     = true
-  }
-
-  rules {
-    action = "set_cache_settings"
-    action_parameters {
-      cache = true
-      edge_ttl {
-        mode = "respect_origin"
-      }
-      browser_ttl {
-        mode = "respect_origin"
-      }
-    }
-    expression  = "(http.host eq \"${var.domain}\" and http.request.uri.path.extension in {\"css\" \"js\" \"woff\" \"woff2\" \"ttf\" \"eot\" \"otf\"})"
-    description = "Cache static assets for CDN"
-    enabled     = true
-  }
-
-  rules {
-    action = "set_cache_settings"
-    action_parameters {
-      cache = true
-      edge_ttl {
-        mode = "respect_origin"
-      }
-      browser_ttl {
-        mode = "respect_origin"
-      }
-    }
-    expression  = "(http.host eq \"${var.domain}\" and http.request.uri.path.extension in {\"json\" \"xml\" \"txt\" \"pdf\" \"zip\"})"
-    description = "Cache documents for CDN"
-    enabled     = true
+resource "aws_s3_bucket_versioning" "cdn" {
+  bucket = aws_s3_bucket.cdn.id
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
-resource "cloudflare_ruleset" "transform_headers" {
-  zone_id = var.cloudflare_zone_id
-  name    = "${var.bucket_name}-cors-headers"
-  kind    = "zone"
-  phase   = "http_response_headers_transform"
+resource "aws_s3_bucket_server_side_encryption_configuration" "cdn" {
+  bucket = aws_s3_bucket.cdn.id
 
-  rules {
-    action = "rewrite"
-    action_parameters {
-      headers {
-        name      = "Access-Control-Allow-Origin"
-        operation = "set"
-        value     = "*"
-      }
-      headers {
-        name      = "Access-Control-Allow-Methods"
-        operation = "set"
-        value     = "GET, HEAD, OPTIONS"
-      }
-      headers {
-        name      = "Access-Control-Expose-Headers"
-        operation = "set"
-        value     = "ETag"
-      }
-    }
-    expression  = "(http.host eq \"${var.domain}\")"
-    description = "CORS headers for CDN"
-    enabled     = true
-  }
-}
-
-
-resource "cloudflare_api_token" "r2_token" {
-  name = "${var.bucket_name}-r2-access"
-
-  policy {
-    permission_groups = [
-      data.cloudflare_api_token_permission_groups.all.r2["Workers R2 Storage Bucket Item Write"],
-      data.cloudflare_api_token_permission_groups.all.r2["Workers R2 Storage Bucket Item Read"],
-    ]
-    resources = {
-      "com.cloudflare.edge.r2.bucket.${var.cloudflare_account_id}_default_${var.bucket_name}" = "*"
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
 }
 
-resource "cloudflare_api_token" "d1_token" {
-  name = "${var.d1_database_name}-d1-access"
+# DynamoDB table for short links
+resource "aws_dynamodb_table" "links" {
+  name         = var.dynamodb_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "shortCode"
 
-  policy {
-    permission_groups = [
-      data.cloudflare_api_token_permission_groups.all.account["D1 Write"],
-    ]
-    resources = {
-      "com.cloudflare.api.account.${var.cloudflare_account_id}" = "*"
-    }
+  attribute {
+    name = "shortCode"
+    type = "S"
   }
-}
 
-data "cloudflare_api_token_permission_groups" "all" {}
-
-# D1 database initialization SQL
-# Run this manually: wrangler d1 execute <db-name> --command "<sql>"
-locals {
-  d1_init_sql = <<-SQL
-    CREATE TABLE IF NOT EXISTS links (
-      shortCode TEXT PRIMARY KEY,
-      longUrl TEXT NOT NULL,
-      createdAt TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_links_createdAt ON links(createdAt);
-  SQL
-
-  # Wrangler configuration values for deployment
-  wrangler_config = {
-    worker_name   = var.project_name
-    bucket_name   = cloudflare_r2_bucket.cdn.name
-    database_name = cloudflare_d1_database.links.name
-    database_id   = cloudflare_d1_database.links.id
-    domain        = var.domain
+  tags = {
+    Name = var.dynamodb_table_name
   }
 }

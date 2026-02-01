@@ -1,16 +1,16 @@
 # CDN
 
-A self-hosted CDN and link shortener powered by Cloudflare Workers, R2, and D1, with a Next.js admin dashboard to manage objects.
+A self-hosted CDN and link shortener powered by AWS S3 and DynamoDB, with a Next.js admin dashboard deployed to Vercel.
 
 ## Why?
 
-After being inspired by code with beto's post about what he built with claude (https://x.com/betomoedano/status/2017225369804259731), I realised I could do with improving my CDN project. with the ability to generate short links for sharing private files (for things such as internal TestFlight/TestTrack feedback) along with moving to cloudflare for better costs. Cloudflare R2 offers generous free tier limits and S3-compatible APIs, while D1 provides a lightweight database for the link shortener functionality with a generous free tier.
+After being inspired by code with beto's post about what he built with claude (https://x.com/betomoedano/status/2017225369804259731), I realised I could do with improving my CDN project. The ability to generate short links for sharing private files (for things such as internal TestFlight/TestTrack feedback) was a key feature I wanted. AWS S3 provides reliable object storage with great SDK support, while DynamoDB offers a serverless database for the link shortener functionality.
 
 **Key features:**
 
-- **Private R2 bucket** - Files are only accessible through the Worker or via generated short links
-- **Edge deployment** - Next.js app runs on Cloudflare Workers for low latency globally
-- **Direct bindings** - Uses R2 and D1 bindings
+- **Private S3 bucket** - Files are only accessible through the Vercel app or via generated short links
+- **Serverless deployment** - Next.js app runs on Vercel for low latency globally
+- **Infrastructure as code** - Terraform manages all AWS resources
 
 ## Table of contents
 
@@ -22,10 +22,9 @@ After being inspired by code with beto's post about what he built with claude (h
   - [Prerequisites](#prerequisites)
   - [Getting started](#getting-started)
     - [1. Clone and install](#1-clone-and-install)
-    - [2. Set up Cloudflare resources](#2-set-up-cloudflare-resources)
+    - [2. Set up AWS resources](#2-set-up-aws-resources)
     - [3. Configure environment variables](#3-configure-environment-variables)
-    - [4. Initialize the D1 database](#4-initialize-the-d1-database)
-    - [5. Run the admin dashboard](#5-run-the-admin-dashboard)
+    - [4. Run the admin dashboard](#4-run-the-admin-dashboard)
   - [Deploying your own version](#deploying-your-own-version)
     - [Infrastructure deployment](#infrastructure-deployment)
     - [Admin dashboard deployment](#admin-dashboard-deployment)
@@ -37,33 +36,30 @@ After being inspired by code with beto's post about what he built with claude (h
 
 ## Features
 
-- **Private R2 storage** - S3-compatible object storage, accessible only through the Worker
+- **Private S3 storage** - Object storage accessible only through the Next.js app
 - **Link shortener** - Create short URLs that serve files directly
-- **Admin dashboard** - Next.js app for managing files and links, deployed to Cloudflare Workers
-- **Edge caching** - Cloudflare cache rules for images, static assets, and documents
+- **Admin dashboard** - Next.js app for managing files and links, deployed to Vercel
+- **Multiple public endpoints** - `/cdn/*`, `/public/*`, and `/s/*` routes for serving files
 - **CORS headers** - Pre-configured for cross-origin requests
 - **Infrastructure as code** - Terraform configuration for reproducible deployments
-- **Zero cold starts** - Uses OpenNext adapter optimized for Cloudflare Workers
 
 ## Architecture
 
-| Component      | Technology         | Purpose                                  |
-| -------------- | ------------------ | ---------------------------------------- |
-| Compute        | Cloudflare Workers | Edge-deployed Next.js app                |
-| Object storage | Cloudflare R2      | Private static file hosting              |
-| Database       | Cloudflare D1      | Link shortener data                      |
-| CDN            | Cloudflare         | Edge caching, DNS, and custom domain     |
-| Admin UI       | Next.js + OpenNext | File and link management                 |
-| Infrastructure | Terraform          | Resource provisioning (R2, D1, API keys) |
+| Component      | Technology | Purpose                              |
+| -------------- | ---------- | ------------------------------------ |
+| Compute        | Vercel     | Serverless Next.js deployment        |
+| Object storage | AWS S3     | Private static file hosting          |
+| Database       | DynamoDB   | Link shortener data                  |
+| Admin UI       | Next.js    | File and link management             |
+| Infrastructure | Terraform  | Resource provisioning (S3, DynamoDB) |
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/en/) (v20+)
 - [Bun](https://bun.sh/) (v1.3.5+)
 - [Terraform](https://www.terraform.io/) (v1.5.0+)
-- [Cloudflare account](https://dash.cloudflare.com/sign-up)
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
-- A domain managed by Cloudflare
+- [AWS account](https://aws.amazon.com/)
+- [Vercel account](https://vercel.com/)
 
 ## Getting started
 
@@ -75,18 +71,15 @@ cd cdn
 bun install
 ```
 
-### 2. Set up Cloudflare resources
+### 2. Set up AWS resources
 
-You'll need the following from your Cloudflare dashboard:
+You'll need the following from your AWS account:
 
-1. **Account ID** - Found in the URL when viewing your account: `dash.cloudflare.com/<account-id>`
-2. **Zone ID** - Found in the Overview tab of your domain
-3. **API Token** - Create one with the following permissions `https://dash.cloudflare.com/profile/api-tokens`:
-   - Account > D1 > Edit
-   - Account > Workers R2 Storage > Edit
-   - Zone > DNS > Edit
-   - Zone > Cache Rules > Edit
-   - Zone > Transform Rules > Edit
+1. **AWS Access Key ID** - From IAM user credentials
+2. **AWS Secret Access Key** - From IAM user credentials
+3. **IAM permissions** - The user needs permissions for:
+   - S3: `s3:*` on your bucket
+   - DynamoDB: `dynamodb:*` on your table
 
 ### 3. Configure environment variables
 
@@ -96,15 +89,7 @@ Copy the example file and fill in your values:
 cp .env.example .env
 ```
 
-### 4. Initialize the D1 database
-
-After deploying the infrastructure, initialize the database schema:
-
-```bash
-wrangler d1 execute <your-db-name> --command "CREATE TABLE IF NOT EXISTS links (shortCode TEXT PRIMARY KEY, longUrl TEXT NOT NULL, createdAt TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_links_createdAt ON links(createdAt);"
-```
-
-### 5. Run the admin dashboard
+### 4. Run the admin dashboard
 
 ```bash
 bun run dev
@@ -117,7 +102,7 @@ The dashboard will be available at `http://localhost:3000`.
 ### Infrastructure deployment
 
 > [!IMPORTANT]
-> You'll need an S3 bucket (or compatible storage) to store Terraform state. Update the backend configuration in `versions.tf` before deploying.
+> You'll need an S3 bucket to store Terraform state. Update the backend configuration in `versions.tf` before deploying.
 
 1. **Update Terraform backend**
 
@@ -149,167 +134,98 @@ The dashboard will be available at `http://localhost:3000`.
      default = "your-cdn-bucket"
    }
 
-   variable "domain" {
-     default = "cdn.yourdomain.com"
-   }
-
-   variable "d1_database_name" {
+   variable "dynamodb_table_name" {
      default = "your-cdn-links"
    }
    ```
 
-3. **Create a `terraform.tfvars` file**
-
-   ```hcl
-   cloudflare_account_id = "your-account-id"
-   cloudflare_zone_id    = "your-zone-id"
-   cloudflare_api_token  = "your-api-token"
-   ```
-
-   > [!WARNING]
-   > Never commit `terraform.tfvars` to version control. It's already in `.gitignore`.
-
-4. **Initialize and deploy**
+3. **Initialize and deploy**
 
    ```bash
    terraform init
-   terraform plan -var-file terraform.tfvars
-   terraform apply -var-file terraform.tfvars
+   terraform plan
+   terraform apply
    ```
 
-5. **Capture the outputs**
+### Admin dashboard deployment (Vercel)
 
-   After applying, Terraform will output the credentials you need for the admin dashboard:
-
-   ```bash
-   terraform output -json
-   ```
-
-   Copy the relevant values to your `.env` file.
-
-### Admin dashboard deployment (Cloudflare Workers)
-
-The admin dashboard is deployed to Cloudflare Workers using the OpenNext adapter. This gives you:
+The admin dashboard is deployed to Vercel. This gives you:
 
 - Global edge deployment with low latency
-- Direct R2 and D1 bindings (no API tokens needed in production)
-- Private bucket access - files are only served through the Worker
+- Automatic HTTPS and custom domains
+- Private bucket access - files are only served through the app
 
-1. **Update `wrangler.toml`**
+1. **Connect to Vercel**
 
-   Edit `wrangler.toml` and update the D1 database ID from the Terraform output:
+   Link your repository to Vercel and configure the environment variables in the Vercel dashboard.
 
-   ```toml
-   [[d1_databases]]
-   binding = "D1_DATABASE"
-   database_name = "your-cdn-links"
-   database_id = "your-database-id-from-terraform"
-   ```
+2. **Set environment variables**
 
-   Also update the bucket name and custom domain if needed:
+   In the Vercel dashboard, set the required environment variables:
 
-   ```toml
-   [[r2_buckets]]
-   binding = "R2_BUCKET"
-   bucket_name = "your-cdn-bucket"
+   - `AWS_REGION`
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - `S3_BUCKET_NAME`
+   - `DYNAMODB_TABLE_NAME`
+   - `NEXT_PUBLIC_CDN_URL`
+   - `NEXT_PUBLIC_ADMIN_URL`
 
-   [env.production]
-   routes = [
-     { pattern = "cdn.yourdomain.com", custom_domain = true }
-   ]
-   ```
+3. **Deploy**
 
-2. **Preview locally with Workers runtime**
-
-   Test your app in the Cloudflare Workers runtime:
-
-   ```bash
-   bun run preview
-   ```
-
-3. **Deploy to Cloudflare Workers**
-
-   ```bash
-   bun run deploy
-   ```
-
-   This will:
-   - Build your Next.js app with OpenNext
-   - Deploy to Cloudflare Workers
-   - Set up the custom domain route
-
-4. **Set runtime environment variables**
-
-   In the Cloudflare dashboard, set any required environment variables for your Worker:
-   - Go to Workers & Pages > your-worker > Settings > Variables
-   - Add `NEXT_PUBLIC_CDN_URL` = `https://cdn.yourdomain.com`
+   Push to your main branch or trigger a deployment from the Vercel dashboard.
 
 > [!NOTE]
-> The R2 bucket is private by design. Files can only be accessed:
+> The S3 bucket is private by design. Files can only be accessed:
 >
-> - Through the admin dashboard (`/cdn/*` routes)
+> - Through the admin dashboard (`/cdn/*` or `/public/*` routes)
 > - Via short links (`/s/*` routes)
 > - Through the API routes (for authorized management)
 
 ## Environment variables
 
-### Local development (`.env`)
-
-These are only needed for local development. In production, the Worker uses bindings directly.
-
-| Variable                | Description                            | Required |
-| ----------------------- | -------------------------------------- | -------- |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID             | Yes      |
-| `R2_BUCKET_NAME`        | Name of the R2 bucket                  | Yes      |
-| `R2_API_TOKEN`          | R2 API token (from Terraform output)   | Yes      |
-| `D1_DATABASE_ID`        | D1 database ID (from Terraform output) | Yes      |
-| `D1_API_TOKEN`          | D1 API token (from Terraform output)   | Yes      |
-| `NEXT_PUBLIC_CDN_URL`   | Public URL of your CDN                 | Yes      |
-
-### Production (Cloudflare Dashboard)
-
-| Variable              | Description            | Set In           |
-| --------------------- | ---------------------- | ---------------- |
-| `NEXT_PUBLIC_CDN_URL` | Public URL of your CDN | Worker Variables |
-
-> [!NOTE]
-> In production, R2 and D1 access is handled through bindings configured in `wrangler.toml`. No API tokens are needed at runtime.
+| Variable                 | Description                            | Required |
+| ------------------------ | -------------------------------------- | -------- |
+| `AWS_REGION`             | AWS region (e.g., `eu-west-2`)         | Yes      |
+| `AWS_ACCESS_KEY_ID`      | AWS access key ID                      | Yes      |
+| `AWS_SECRET_ACCESS_KEY`  | AWS secret access key                  | Yes      |
+| `S3_BUCKET_NAME`         | Name of the S3 bucket                  | Yes      |
+| `DYNAMODB_TABLE_NAME`    | Name of the DynamoDB table             | Yes      |
+| `NEXT_PUBLIC_CDN_URL`    | Public URL for CDN assets              | Yes      |
+| `NEXT_PUBLIC_ADMIN_URL`  | Public URL for admin site              | Yes      |
+| `BASIC_AUTH_USER`        | Basic auth username (optional)         | No       |
+| `BASIC_AUTH_PASSWORD`    | Basic auth password (optional)         | No       |
 
 ## Terraform variables
 
-| Variable                | Description             | Default           |
-| ----------------------- | ----------------------- | ----------------- |
-| `bucket_name`           | Name of the R2 bucket   | `lho-cdn`         |
-| `domain`                | Domain name for the CDN | `cdn.lhowsam.com` |
-| `cloudflare_zone_id`    | Cloudflare Zone ID      | -                 |
-| `cloudflare_account_id` | Cloudflare Account ID   | -                 |
-| `cloudflare_api_token`  | Cloudflare API token    | -                 |
-| `r2_location`           | R2 bucket location hint | `WEUR` (west EU)  |
-| `d1_database_name`      | D1 database name        | `lho-cdn-links`   |
+| Variable              | Description              | Default         |
+| --------------------- | ------------------------ | --------------- |
+| `aws_region`          | AWS region               | `eu-west-2`     |
+| `bucket_name`         | Name of the S3 bucket    | `lho-cdn`       |
+| `dynamodb_table_name` | Name of DynamoDB table   | `lho-cdn-links` |
 
 ## Project structure
 
 ```
 cdn/
 ├── app/                    # Next.js app router
-│   ├── api/               # API routes for R2 and D1
+│   ├── api/               # API routes for S3 and DynamoDB
 │   │   ├── links/         # Link shortener endpoints
-│   │   └── objects/       # R2 object management
-│   ├── cdn/               # CDN file serving (private R2 access)
+│   │   └── objects/       # S3 object management
+│   ├── cdn/               # CDN file serving (private S3 access)
 │   │   └── [[...path]]/   # Catch-all route for file serving
-│   └── s/                 # Short link handlers (proxy files or redirect)
+│   ├── public/            # Public file serving endpoint
+│   │   └── [[...path]]/   # Catch-all route for file serving
+│   └── s/                 # Short link handlers
 ├── components/            # React components
 ├── hooks/                 # Custom React hooks
 ├── lib/                   # Utility functions
-│   ├── d1.ts             # D1 database client (bindings + REST fallback)
-│   ├── r2.ts             # R2 storage client (bindings + REST fallback)
+│   ├── dynamodb.ts       # DynamoDB client
+│   ├── s3.ts             # S3 storage client
 │   └── utils.ts          # Shared utilities
 ├── .github/
 │   ├── actions/          # Reusable GitHub Actions
 │   └── workflows/        # CI/CD workflows
-├── wrangler.toml         # Cloudflare Workers configuration
-├── open-next.config.ts   # OpenNext adapter configuration
-├── cloudflare-env.d.ts   # TypeScript types for Cloudflare bindings
 ├── main.tf               # Terraform infrastructure
 ├── variables.tf          # Terraform variables
 ├── outputs.tf            # Terraform outputs
@@ -318,13 +234,14 @@ cdn/
 
 ### Key routes
 
-| Route            | Purpose                                         |
-| ---------------- | ----------------------------------------------- |
-| `/`              | Admin dashboard for managing files and links    |
-| `/cdn/*`         | Serves files from private R2 bucket             |
-| `/s/:shortCode`  | Short link handler (proxies files or redirects) |
-| `/api/objects/*` | REST API for R2 object management               |
-| `/api/links/*`   | REST API for link shortener                     |
+| Route            | Auth     | Purpose                                         |
+| ---------------- | -------- | ----------------------------------------------- |
+| `/`              | Required | Admin dashboard for managing files and links    |
+| `/cdn/*`         | Required | Serves files from S3 (private access)           |
+| `/public/*`      | Public   | Serves files from S3 (shareable)                |
+| `/s/:shortCode`  | Public   | Short link handler (serves files or redirects)  |
+| `/api/objects/*` | Required | REST API for S3 object management               |
+| `/api/links/*`   | Required | REST API for link shortener                     |
 
 ## Contributing
 

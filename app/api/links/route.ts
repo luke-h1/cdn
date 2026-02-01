@@ -1,6 +1,12 @@
 import { NextRequest } from "next/server";
-import { putLinkOverwrite, listLinks } from "@/lib/d1";
-import { badRequest, serverError, jsonResponse } from "@/lib/http";
+import { putLinkOverwrite, listLinks } from "@/lib/dynamodb";
+import {
+  badRequest,
+  serverError,
+  jsonResponse,
+  checkBasicAuth,
+  unauthorizedResponse,
+} from "@/lib/http";
 import {
   SHORT_CODE_PATTERN,
   SHORT_CODE_CHARS,
@@ -29,7 +35,8 @@ function generateShortCode(length = DEFAULT_SHORT_CODE_LENGTH): string {
   return result;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!checkBasicAuth(request)) return unauthorizedResponse();
   try {
     const links = await listLinks();
     return jsonResponse({ links });
@@ -40,6 +47,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!checkBasicAuth(request)) return unauthorizedResponse();
   try {
     const body = (await request.json()) as {
       longUrl?: string;

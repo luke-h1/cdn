@@ -1,10 +1,45 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { CORS_HEADERS, CORS_PREFLIGHT_HEADERS } from "./constants";
 import { getCacheControl, resolveContentType } from "./mime";
 
 export interface ApiError {
   error: string;
   code?: string;
+}
+
+export function checkBasicAuth(request: NextRequest): boolean {
+  const authHeader =
+    request.headers.get("authorization") ??
+    request.headers.get("Authorization");
+  if (!authHeader?.startsWith("Basic ")) return false;
+
+  const base64 = authHeader.slice(6).trim();
+  let decoded: string;
+  try {
+    decoded = atob(base64);
+  } catch {
+    return false;
+  }
+
+  const colonIndex = decoded.indexOf(":");
+  if (colonIndex === -1) return false;
+  const user = decoded.slice(0, colonIndex).trim();
+  const pass = decoded.slice(colonIndex + 1).trim();
+
+  const expectedUser = (process.env.BASIC_AUTH_USER ?? "").trim();
+  const expectedPass = (process.env.BASIC_AUTH_PASSWORD ?? "").trim();
+
+  if (!expectedUser || !expectedPass) return true; // No auth configured = allow
+  return user === expectedUser && pass === expectedPass;
+}
+
+export function unauthorizedResponse(): NextResponse {
+  return new NextResponse("Authentication required", {
+    status: 401,
+    headers: {
+      "WWW-Authenticate": 'Basic realm="CDN Admin", charset="UTF-8"',
+    },
+  });
 }
 
 export function errorResponse(

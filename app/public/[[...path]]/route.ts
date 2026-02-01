@@ -11,6 +11,7 @@ import {
   decodePathSegments,
   isValidPath,
 } from "@/lib/http";
+import { CACHE_TTL } from "@/lib/constants";
 
 type RouteParams = { params: Promise<{ path?: string[] }> };
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const object = await getObject(path);
 
     if (!object) {
-      return notFound();
+      return notFound("File not found");
     }
 
     const ifNoneMatch = request.headers.get("if-none-match");
@@ -43,9 +44,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       contentLength: object.contentLength,
       etag: object.etag,
       path,
+      cacheControl: `public, max-age=${CACHE_TTL.DEFAULT}`,
     });
   } catch (err) {
-    console.error("CDN serve error:", err);
+    console.error("Public serve error:", err);
     return serverError(err, "Failed to serve file");
   }
 }

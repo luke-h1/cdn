@@ -22,11 +22,6 @@ terraform.rc
 out/
 node_modules/
 
-# Cloudflare Workers / OpenNext
-.open-next/
-.wrangler/
-.dev.vars
-
 # Environment
 .env
 .env.local

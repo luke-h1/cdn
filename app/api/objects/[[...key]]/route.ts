@@ -5,7 +5,7 @@ import {
   deleteObject,
   copyObject,
   headObject,
-} from "@/lib/r2";
+} from "@/lib/s3";
 import {
   badRequest,
   notFound,
@@ -13,12 +13,15 @@ import {
   jsonResponse,
   decodePathSegments,
   isValidPath,
+  checkBasicAuth,
+  unauthorizedResponse,
 } from "@/lib/http";
 import { LIMITS } from "@/lib/constants";
 
 type RouteParams = { params: Promise<{ key?: string[] }> };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  if (!checkBasicAuth(request)) return unauthorizedResponse();
   const key = decodePathSegments((await params).key);
 
   if (!key) {
@@ -65,6 +68,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
+  if (!checkBasicAuth(request)) return unauthorizedResponse();
   const keyFromParams = decodePathSegments((await params).key);
 
   if (keyFromParams) {
@@ -124,6 +128,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  if (!checkBasicAuth(request)) return unauthorizedResponse();
   const key = decodePathSegments((await params).key);
 
   if (!key) {
@@ -146,7 +151,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  if (!checkBasicAuth(request)) return unauthorizedResponse();
   const key = decodePathSegments((await params).key);
 
   if (!key) {

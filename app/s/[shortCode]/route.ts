@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLink } from "@/lib/d1";
-import { getObject } from "@/lib/r2";
-import { fileResponse } from "@/lib/http";
+import { getLink } from "@/lib/dynamodb";
+import { getObject } from "@/lib/s3";
+import { fileResponse, notFound } from "@/lib/http";
 import { CACHE_TTL } from "@/lib/constants";
 
 function isCdnUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
+    const rawCdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
+    const cdnUrl =
+      rawCdnUrl && !rawCdnUrl.startsWith("http")
+        ? `https://${rawCdnUrl}`
+        : rawCdnUrl;
 
     if (cdnUrl) {
       const cdnParsed = new URL(cdnUrl);
@@ -22,7 +26,7 @@ function isCdnUrl(url: string): boolean {
   }
 }
 
-function extractR2Key(url: string): string | null {
+function extractS3Key(url: string): string | null {
   try {
     const parsed = new URL(url);
     let path = parsed.pathname.replace(/^\//, "");
@@ -46,21 +50,22 @@ export async function GET(
     typeof shortCode === "string" ? decodeURIComponent(shortCode) : "";
 
   if (!code) {
-    return NextResponse.redirect(new URL("/", request.url), 302);
+    return notFound("Missing short code");
   }
 
   try {
     const link = await getLink(code);
 
     if (!link?.longUrl) {
-      return NextResponse.redirect(new URL("/", request.url), 302);
+      return notFound("Short link not found");
     }
 
+    // If the link points to our CDN, serve the file directly from S3
     if (isCdnUrl(link.longUrl)) {
-      const r2Key = extractR2Key(link.longUrl);
+      const s3Key = extractS3Key(link.longUrl);
 
-      if (r2Key) {
-        const object = await getObject(r2Key);
+      if (s3Key) {
+        const object = await getObject(s3Key);
 
         if (object) {
           return fileResponse({
@@ -68,18 +73,19 @@ export async function GET(
             contentType: object.contentType,
             contentLength: object.contentLength,
             etag: object.etag,
-            path: r2Key,
+            path: s3Key,
             cacheControl: `public, max-age=${CACHE_TTL.IMMUTABLE}, immutable`,
           });
         }
 
-        return NextResponse.redirect(new URL("/", request.url), 302);
+        return notFound("File not found in storage");
       }
     }
 
+    // Otherwise redirect to the long URL
     return NextResponse.redirect(link.longUrl, 307);
   } catch (err) {
     console.error("Short link error:", err);
-    return NextResponse.redirect(new URL("/", request.url), 302);
+    return notFound("Short link error");
   }
 }

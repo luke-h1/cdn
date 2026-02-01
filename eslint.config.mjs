@@ -23,10 +23,7 @@ export default [
     ignores: [
       "**/node_modules",
       "**/.github",
-      "**/public",
       "**/.next",
-      "**/.open-next",
-      "**/.wrangler",
       "**/build",
       "**/coverage",
       "*.config.js",
@@ -42,12 +39,6 @@ export default [
         ...globals.node,
         ...globals.browser,
         React: true,
-        R2Bucket: true,
-        R2Object: true,
-        D1Database: true,
-        Fetcher: true,
-        CfProperties: true,
-        ExecutionContext: true,
       },
       parserOptions: {
         project: "./tsconfig.json",

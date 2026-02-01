@@ -1,15 +1,9 @@
 name: Deploy
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      secrets_provider:
-        description: "Secrets provider"
-        required: true
-        default: "gha-secrets"
-        type: choice
-        options:
-          - gha-secrets
-          - 1password
 
 concurrency:
   group: deploy-production
@@ -38,7 +32,7 @@ jobs:
         uses: ./.github/actions/validate
 
   deploy:
-    name: Deploy Infrastructure
+    name: Deploy
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -49,7 +43,6 @@ jobs:
           fetch-depth: 0
 
       - name: Load secrets from 1Password
-        if: inputs.secrets_provider == '1password'
         uses: 1password/load-secrets-action@v2
         with:
           export-env: true
@@ -57,22 +50,20 @@ jobs:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           AWS_ACCESS_KEY_ID: op://ci-cd/cdn/AWS_ACCESS_KEY_ID
           AWS_SECRET_ACCESS_KEY: op://ci-cd/cdn/AWS_SECRET_ACCESS_KEY
-          TF_VAR_cloudflare_account_id: op://ci-cd/cdn/CLOUDFLARE_ACCOUNT_ID
-          TF_VAR_cloudflare_api_token: op://ci-cd/cdn/CLOUDFLARE_API_TOKEN
-          TF_VAR_cloudflare_zone_id: op://ci-cd/cdn/CLOUDFLARE_ZONE_ID
-
-      - name: Set secrets from GitHub Actions
-        if: inputs.secrets_provider == 'gha-secrets'
-        run: |
-          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
-          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
-          echo "TF_VAR_cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" >> $GITHUB_ENV
-          echo "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> $GITHUB_ENV
-          echo "TF_VAR_cloudflare_zone_id=${{ secrets.CLOUDFLARE_ZONE_ID }}" >> $GITHUB_ENV
+          BASIC_AUTH_USER: op://ci-cd/cdn/BASIC_AUTH_USER
+          BASIC_AUTH_PASSWORD: op://ci-cd/cdn/BASIC_AUTH_PASSWORD
+          VERCEL_TOKEN: op://ci-cd/cdn/VERCEL_TOKEN
+          VERCEL_ORG_ID: op://ci-cd/cdn/VERCEL_ORG_ID
+          VERCEL_PROJECT_ID: op://ci-cd/cdn/VERCEL_PROJECT_ID
 
       - name: Deploy
         uses: ./.github/actions/deploy
         with:
           aws-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          basic-auth-user: ${{ env.BASIC_AUTH_USER }}
+          basic-auth-password: ${{ env.BASIC_AUTH_PASSWORD }}
+          vercel-token: ${{ env.VERCEL_TOKEN }}
+          vercel-org-id: ${{ env.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ env.VERCEL_PROJECT_ID }}
           terraform-dir: "."

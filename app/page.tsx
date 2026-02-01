@@ -43,9 +43,7 @@ export default function Home() {
 
         <LinkShortener />
 
-        {error && (
-          <ErrorAlert message={error} onDismiss={clearError} />
-        )}
+        {error && <ErrorAlert message={error} onDismiss={clearError} />}
 
         <ObjectList
           items={items}

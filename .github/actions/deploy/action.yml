@@ -1,28 +1,67 @@
 name: Deploy
-description: Deploy infrastructure via Terraform
+description: Deploy infrastructure via Terraform and frontend to Vercel
 inputs:
   aws-key-id:
-    description: "AWS access key ID for S3 backend"
+    description: "AWS access key ID"
     required: true
   aws-secret-access-key:
-    description: "AWS secret access key for S3 backend"
+    description: "AWS secret access key"
+    required: true
+  aws-region:
+    description: "AWS region"
+    required: false
+    default: "eu-west-2"
+  s3-bucket-name:
+    description: "S3 Bucket Name"
+    required: false
+    default: "lho-cdn"
+  dynamodb-table-name:
+    description: "DynamoDB Table Name"
+    required: false
+    default: "lho-cdn-links"
+  basic-auth-user:
+    description: "Basic auth username"
+    required: false
+    default: ""
+  basic-auth-password:
+    description: "Basic auth password"
+    required: false
+    default: ""
+  vercel-token:
+    description: "Vercel API token"
+    required: true
+  vercel-org-id:
+    description: "Vercel Organization ID"
+    required: true
+  vercel-project-id:
+    description: "Vercel Project ID"
     required: true
   terraform-dir:
     description: "Directory containing Terraform configuration"
     required: true
     default: "."
+  cdn-url:
+    description: "Public URL for CDN assets (served via Vercel /cdn route)"
+    required: false
+    default: "https://cdn-viewer.lhowsam.com/cdn"
+  admin-url:
+    description: "Public URL for admin/viewer site"
+    required: false
+    default: "https://cdn-viewer.lhowsam.com"
 runs:
   using: composite
   steps:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_wrapper: false
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ inputs.aws-key-id }}
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
-        aws-region: eu-west-2
+        aws-region: ${{ inputs.aws-region }}
         mask-aws-account-id: true
 
     - name: Terraform init
@@ -40,13 +79,35 @@ runs:
       working-directory: ${{ inputs.terraform-dir }}
       run: terraform validate
 
-    - name: Terraform plan
-      id: plan
-      shell: bash
-      working-directory: ${{ inputs.terraform-dir }}
-      run: terraform plan -no-color -out=tfplan
-
     - name: Terraform apply
       shell: bash
       working-directory: ${{ inputs.terraform-dir }}
-      run: terraform apply -auto-approve tfplan
+      run: terraform apply -auto-approve
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version-file: ".bun-version"
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
+
+    - name: Deploy to Vercel
+      shell: bash
+      run: |
+        echo "Deploying to Vercel..."
+        npx vercel deploy --prod --token=${{ inputs.vercel-token }} \
+          -e NEXT_PUBLIC_CDN_URL=${{ inputs.cdn-url }} \
+          -e NEXT_PUBLIC_ADMIN_URL=${{ inputs.admin-url }} \
+          -e AWS_REGION=${{ inputs.aws-region }} \
+          -e AWS_ACCESS_KEY_ID=${{ inputs.aws-key-id }} \
+          -e AWS_SECRET_ACCESS_KEY=${{ inputs.aws-secret-access-key }} \
+          -e S3_BUCKET_NAME=${{ inputs.s3-bucket-name }} \
+          -e DYNAMODB_TABLE_NAME=${{ inputs.dynamodb-table-name }} \
+          -e BASIC_AUTH_USER=${{ inputs.basic-auth-user }} \
+          -e BASIC_AUTH_PASSWORD=${{ inputs.basic-auth-password }}
+        echo "✓ Deployment complete!"
+      env:
+        VERCEL_ORG_ID: ${{ inputs.vercel-org-id }}
+        VERCEL_PROJECT_ID: ${{ inputs.vercel-project-id }}
