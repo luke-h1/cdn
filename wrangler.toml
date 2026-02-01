@@ -1,0 +1,29 @@
+#:schema node_modules/wrangler/config-schema.json
+
+name = "lho-cdn"
+main = ".open-next/worker.js"
+compatibility_date = "2025-01-30"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "lho-cdn"
+
+# D1 database binding for link shortener
+# D1_DATABASE_ID=xxx bun run deploy
+[[d1_databases]]
+binding = "D1_DATABASE"
+database_name = "lho-cdn-links"
+database_id = "${D1_DATABASE_ID}"
+
+[env.production]
+routes = [
+  { pattern = "cdn.lhowsam.com", custom_domain = true }
+]
+
+[env.production.vars]
+NEXT_PUBLIC_CDN_URL = "https://cdn.lhowsam.com"

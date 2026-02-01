@@ -1,0 +1,12 @@
+name: Validate
+description: Validate code quality
+runs:
+  using: composite
+  steps:
+    - name: Lint
+      shell: bash
+      run: bun run lint
+
+    - name: Type check
+      shell: bash
+      run: bun run build

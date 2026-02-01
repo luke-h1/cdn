@@ -1,5 +1,5 @@
 variable "bucket_name" {
-  description = "Name of the S3 bucket for static file hosting"
+  description = "Name of the R2 bucket for static file hosting"
   type        = string
   default     = "lho-cdn"
 }
@@ -15,51 +15,27 @@ variable "cloudflare_zone_id" {
   type        = string
 }
 
-variable "aws_region" {
-  description = "AWS region for the S3 bucket"
+variable "cloudflare_account_id" {
+  description = "Cloudflare Account ID"
   type        = string
-  default     = "eu-west-2"
 }
-
-variable "cloudflare_proxied" {
-  description = "Whether Cloudflare should proxy traffic (enables CDN caching)"
-  type        = bool
-  default     = true
-}
-
-variable "cache_ttl" {
-  description = "Browser cache TTL in seconds"
-  type        = number
-  default     = 86400
-}
-
-variable "tags" {
-  description = "Tags to apply to AWS resources"
-  type        = map(string)
-  default     = {}
-}
-
-variable "cors_allowed_origins" {
-  description = "List of allowed origins for CORS"
-  type        = list(string)
-  default     = ["*"]
-}
-
-variable "cors_allowed_methods" {
-  description = "List of allowed HTTP methods for CORS"
-  type        = list(string)
-  default     = ["GET", "HEAD"]
-}
-
 
 variable "cloudflare_api_token" {
+  description = "Cloudflare API token with permissions for R2, D1, and DNS"
   type        = string
-  description = "The cloudflare API token to use"
+  sensitive   = true
 }
 
-variable "zone_id" {
+variable "r2_location" {
+  description = "R2 bucket location hint (e.g., 'WEUR' for Western Europe)"
   type        = string
-  description = "AWS hosted zone ID"
+  default     = "WEUR"
+}
+
+variable "d1_database_name" {
+  description = "D1 database name for link shortener"
+  type        = string
+  default     = "lho-cdn-links"
 }
 
 variable "project_name" {
@@ -70,9 +46,4 @@ variable "project_name" {
 variable "env" {
   type    = string
   default = "production"
-}
-
-variable "alert_email" {
-  description = "Email address to receive S3 request alerts"
-  type        = string
 }

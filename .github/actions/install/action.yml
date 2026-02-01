@@ -1,0 +1,17 @@
+name: Install
+description: Install dependencies
+runs:
+  using: composite
+  steps:
+    - name: tune linux network
+      run: sudo ethtool -K eth0 tx off rx off
+      shell: bash
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: "1.1.0"
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
